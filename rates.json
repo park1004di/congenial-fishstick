@@ -1,5 +1,6 @@
 {
   "updated": "2026-09-15",
+  "card": { "usdKrw": 1400, "feePct": 2.5 },
   "items": [
     {
       "key": "market",
