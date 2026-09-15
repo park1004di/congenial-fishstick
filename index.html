@@ -253,17 +253,17 @@
     <h2>📢 미얀마 여행 파트너</h2>
 
     <!-- 지니투어: 카카오톡 채널 채팅 바로 연결 -->
-    <a class="ad-img" href="http://pf.kakao.com/_xovhJG/chat" target="_blank" rel="noopener">
+    <a class="ad-img" id="bannerGenie" href="http://pf.kakao.com/_xovhJG/chat" target="_blank" rel="noopener">
       <img src="banner-genie.png" alt="지니투어 미얀마 - 미얀마 양곤 한국인 전문 여행사, 카카오톡으로 문의하기">
     </a>
 
     <!-- 고투미얀마: 네이버 카페 바로 연결 -->
-    <a class="ad-img" href="https://cafe.naver.com/templar777" target="_blank" rel="noopener">
+    <a class="ad-img" id="bannerGoto" href="https://cafe.naver.com/templar777" target="_blank" rel="noopener">
       <img src="banner-goto.png" alt="고투미얀마 - 미얀마 여행 정보, 네이버 카페 바로가기">
     </a>
 
     <!-- 여행자 단톡방: 카카오톡 오픈채팅 바로 연결 -->
-    <a class="ad-img" href="https://open.kakao.com/o/gHQQtHE" target="_blank" rel="noopener">
+    <a class="ad-img" id="bannerChat" href="https://open.kakao.com/o/gHQQtHE" target="_blank" rel="noopener">
       <img src="banner-chat.jpg" alt="미얀마 여행자 단톡방 - 카카오톡 오픈채팅 참여하기">
     </a>
   </div>
@@ -272,6 +272,12 @@
 </div>
 
 <script>
+/* ===== 🎛️ 배너 표시 설정 =====
+   true = 표시 / false = 숨김. 바꾼 뒤 저장(Commit)하면 바로 반영됩니다. */
+const SHOW_CHAT_BANNER = true;   // 여행자 단톡방 배너
+const SHOW_GENIE_BANNER = true;  // 지니투어 배너
+const SHOW_GOTO_BANNER = true;   // 고투미얀마 배너
+
 /* ===== 기본 환율 (rates.json 로드 실패 시 백업값, 2026-09-15 기준) ===== */
 let RATES = {
   updated: "2026-09-15",
@@ -502,6 +508,11 @@ function loadHistory() {
         '<div class="history-empty">아직 저장된 기록이 없습니다.<br>자동 갱신이 시작되면 매일 여기에 쌓입니다.</div>';
     });
 }
+
+/* ===== 배너 표시/숨김 적용 (위쪽 설정 스위치에 따라) ===== */
+if (!SHOW_CHAT_BANNER)  document.getElementById('bannerChat').style.display  = 'none';
+if (!SHOW_GENIE_BANNER) document.getElementById('bannerGenie').style.display = 'none';
+if (!SHOW_GOTO_BANNER)  document.getElementById('bannerGoto').style.display  = 'none';
 
 renderQuickBtns();
 render();
