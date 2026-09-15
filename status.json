@@ -1,0 +1,22 @@
+{
+  "last_run": "2026-09-15T03:10:59",
+  "sources": {
+    "cbm_ref": {
+      "ok": true,
+      "source": "cbm.gov.mm"
+    },
+    "cbm_market": {
+      "ok": true,
+      "source": "cbm.gov.mm"
+    },
+    "market": {
+      "ok": false,
+      "source": "없음 — 이전 값 유지"
+    },
+    "remit": {
+      "ok": true,
+      "source": "수동 관리 (이전 값 유지)"
+    }
+  },
+  "ok": true
+}
