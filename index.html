@@ -234,7 +234,7 @@
           <div class="cp-label">예상 카드 청구액</div>
         </div>
       </div>
-      <div class="cp-note">짯 금액을 입력하면 카드 청구 예상액이 바로 표시됩니다.<br>해당 금액은 카드사별로 다를 수 있습니다.<br><span id="cardCalcNote"></span></div>
+      <div class="cp-note">짯 금액을 입력하면 카드 청구 예상액이 바로 표시됩니다.<br>해당 금액은 카드사별로 다를 수 있습니다.</div>
     </div>
   </div>
 
@@ -415,14 +415,8 @@ function renderCardPay() {
   if (mmk > 0 && cbm && cbm.mmkPerUsd) {
     const krw = (mmk / cbm.mmkPerUsd) * card.usdKrw * (1 + card.feePct / 100);
     document.getElementById('cardValue').textContent = `약 ${fmt(krw)}원`;
-    document.getElementById('cardCalcNote').textContent =
-      `계산 근거: 짯 → 달러(1$=${fmt(cbm.mmkPerUsd)}짯) → 원화(1$=${fmt(card.usdKrw)}원) + 수수료 약 ${card.feePct}%`;
   } else {
     document.getElementById('cardValue').textContent = '0원';
-    document.getElementById('cardCalcNote').textContent =
-      (cbm && cbm.mmkPerUsd)
-        ? `계산 근거: 짯 → 달러(1$=${fmt(cbm.mmkPerUsd)}짯) → 원화(1$=${fmt(card.usdKrw)}원) + 수수료 약 ${card.feePct}%`
-        : '';
   }
 }
 document.getElementById('cardMmkInput').addEventListener('input', renderCardPay);
