@@ -157,19 +157,7 @@ def main():
         status["ok"] = False
         status["missing"] = missing
 
-    # ── 카드결제 추정용 달러/원화 환율 수집 (전신환매도율 근사치) ───────
-    card = {"usdKrw": 1400, "feePct": 2.5}
-    if prev and prev.get("card"):
-        card = dict(prev["card"])
-    try:
-        d = json.loads(fetch("https://open.er-api.com/v6/latest/USD"))
-        if d.get("rates", {}).get("KRW"):
-            card["usdKrw"] = round(d["rates"]["KRW"], 1)
-            print("달러/원화 환율 수집 성공:", card["usdKrw"])
-    except Exception as e:
-        print("달러/원화 환율 수집 실패(이전 값 유지):", e)
-
-    out = {"updated": today, "card": card, "items": items}
+    out = {"updated": today, "items": items}
     with open("rates.json", "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     print("rates.json 갱신 완료:", today)

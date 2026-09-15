@@ -72,15 +72,6 @@
   .result-main .unit  { font-size:15px; font-weight:700; }
   .result-main .sub   { font-size:12px; opacity:.85; margin-top:6px; }
 
-  /* 카드결제 예상 금액 */
-  .card-pay {
-    background:#eef4fd; border:2px solid #9db9e8; border-radius:16px;
-    padding:14px 16px; margin-bottom:14px; text-align:center;
-  }
-  .card-pay .cp-title { font-size:12px; font-weight:800; color:#2b4f8a; }
-  .card-pay .cp-value { font-size:19px; font-weight:900; color:#1e3a68; margin-top:6px; word-break:break-all; }
-  .card-pay .cp-note  { font-size:11px; color:#7a8db0; margin-top:6px; line-height:1.6; }
-
   /* 예상 범위 박스 */
   .range-box {
     background:#fff8ec; border:2px dashed #f0b04a; border-radius:16px;
@@ -193,13 +184,6 @@
     <div class="r-note">환전소·거래처마다 환율이 달라질 수 있어요.</div>
   </div>
 
-  <!-- 카드결제 예상 금액 -->
-  <div class="card-pay">
-    <div class="cp-title">💳 미얀마 국내 카드결제 시 예상 청구 금액</div>
-    <div class="cp-value" id="cardValue">-</div>
-    <div class="cp-note">해당 금액은 카드사별로 다를 수 있습니다.<br><span id="cardCalcNote"></span></div>
-  </div>
-
   <!-- 환율 선택 리스트 -->
   <div class="rate-list">
     <h2>💱 환율 선택 (터치하면 계산 기준이 바뀝니다)</h2>
@@ -232,11 +216,6 @@
     <a class="ad-img" href="https://cafe.naver.com/templar777" target="_blank" rel="noopener">
       <img src="banner-goto.png" alt="고투미얀마 - 미얀마 여행 정보, 네이버 카페 바로가기">
     </a>
-
-    <!-- 여행자 단톡방: 카카오톡 오픈채팅 바로 연결 -->
-    <a class="ad-img" href="https://open.kakao.com/o/gHQQtHE" target="_blank" rel="noopener">
-      <img src="banner-chat.jpg" alt="미얀마 여행자 단톡방 - 카카오톡 오픈채팅 참여하기">
-    </a>
   </div>
   <!-- ===== 광고 배너 끝 ===== -->
 
@@ -246,7 +225,6 @@
 /* ===== 기본 환율 (rates.json 로드 실패 시 백업값, 2026-09-15 기준) ===== */
 let RATES = {
   updated: "2026-09-15",
-  card: { usdKrw: 1400, feePct: 2.5 },  // 카드결제 추정: 달러당 원화 + 수수료 %
   items: [
     { key:"market",     name:"환전소 예상 환율",   desc:"현지 환전소 적용 예상 환율",      mmkPerUsd: 4366, mmkPerKrw: 3.22   },
     { key:"cbm_market", name:"중앙은행 시장거래환율",   desc:"미얀마 중앙은행(CBM) 은행거래 고시", mmkPerUsd: 3660, mmkPerKrw: 2.7194 },
@@ -315,9 +293,7 @@ function render() {
   /* 메인 결과 */
   const mmkMid = toMmk(amt, inCur, r);
   const mid = fromMmk(mmkMid, outCur, r);
-  const prec = outCur === "USD" ? 2 : 0;  // 달러는 소수점 2자리까지 표시
-  const fmtOut = n => n.toLocaleString('ko-KR', { minimumFractionDigits: prec, maximumFractionDigits: prec });
-  document.getElementById('mainResult').textContent = fmtOut(mid);
+  document.getElementById('mainResult').textContent = fmt(mid);
   document.getElementById('mainUnit').textContent = UNIT[outCur];
   document.getElementById('mainRateName').textContent = r.name;
   document.getElementById('mainRateSub').textContent =
@@ -326,28 +302,15 @@ function render() {
   /* 예상 범위: 짯이 낀 변환에만 -10% 하한 적용 (환전소는 더 주는 경우가 거의 없음) */
   if (amt > 0 && usesMmk()) {
     const low = mid * RANGE_PCT;
+    const prec = outCur === "USD" ? 2 : 0;
     document.getElementById('rangeValue').textContent =
-      `${fmtOut(low)} ~ ${fmtOut(mid)} ${UNIT[outCur]}`;
+      `${low.toLocaleString('ko-KR',{maximumFractionDigits:prec})} ~ ${mid.toLocaleString('ko-KR',{maximumFractionDigits:prec})} ${UNIT[outCur]}`;
   } else if (amt > 0) {
     // 원화↔달러: 공식환율이라 정확한 값만 표시
     document.getElementById('rangeLabel').textContent = '✅ 공식 환율 적용 (오차 범위 없음)';
     document.getElementById('rangeValue').textContent = `${fmt(mid)} ${UNIT[outCur]}`;
   } else {
     document.getElementById('rangeValue').textContent = '-';
-  }
-
-  /* 카드결제 예상 청구 금액: 짯 → 달러(CBM 시장거래환율) → 원화(전신환매도율) + 수수료 */
-  const cbm = RATES.items.find(i => i.key === 'cbm_market');
-  const card = RATES.card || { usdKrw: 1400, feePct: 2.5 };
-  if (amt > 0 && cbm && cbm.mmkPerUsd) {
-    const cardKrw = (mmkMid / cbm.mmkPerUsd) * card.usdKrw * (1 + card.feePct / 100);
-    document.getElementById('cardValue').textContent =
-      `${fmt(mmkMid)}짯 결제 시 → 약 ${fmt(cardKrw)}원`;
-    document.getElementById('cardCalcNote').textContent =
-      `짯 → 달러(1$=${fmt(cbm.mmkPerUsd)}짯) → 원화(1$=${fmt(card.usdKrw)}원) + 수수료 약 ${card.feePct}%`;
-  } else {
-    document.getElementById('cardValue').textContent = '-';
-    document.getElementById('cardCalcNote').textContent = '';
   }
 
   /* 환율 카드 목록 */
@@ -363,14 +326,14 @@ function render() {
         <div class="desc">${item.desc}</div>
       </div>
       <div class="nums">
-        <div class="mmk">${fmtOut(v)} ${SYM[outCur]}</div>
+        <div class="mmk">${fmt(v)} ${SYM[outCur]}</div>
         <div class="per">1$ = ${fmt(item.mmkPerUsd)}짯</div>
       </div>`;
     div.onclick = () => { selectedKey = item.key; render(); };
     box.appendChild(div);
   });
 
-  if (usesMmk()) document.getElementById('rangeLabel').textContent = '📊 실제 환전 예상 범위';
+  if (usesMmk()) document.getElementById('rangeLabel').textContent = '📊 실제 환전 예상 범위 (-10% 하한 적용)';
   document.getElementById('updatedAt').textContent =
     `환율 업데이트: ${RATES.updated} · 매일 자동 갱신${liveStamp ? ' · ' + liveStamp : ''}`;
   buildChips('inChips', inCur, c => { inCur = c; renderQuickBtns(); render(); });
