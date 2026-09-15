@@ -26,12 +26,25 @@ jobs:
         run: python update_rates.py
 
       - name: Commit updated files
+        id: commit
         run: |
           git config user.name "rate-bot"
           git config user.email "rate-bot@users.noreply.github.com"
           git add rates.json history.csv history.json status.json
           git diff --cached --quiet || git commit -m "chore: 환율 자동 갱신 $(date +%Y-%m-%d)"
           git push
+
+      # ── Netlify에 새 환율 반영: 환율 파일이 바뀌었으면 Netlify 재배포 호출 ──
+      - name: Netlify 재배포 호출 (Build Hook)
+        if: success()
+        env:
+          NETLIFY_HOOK: ${{ secrets.NETLIFY_BUILD_HOOK }}
+        run: |
+          if [ -n "$NETLIFY_HOOK" ]; then
+            curl -s -X POST -d '{}' "$NETLIFY_HOOK" && echo "Netlify 재배포 요청 완료"
+          else
+            echo "NETLIFY_BUILD_HOOK 비밀값이 없어 건너뜁니다"
+          fi
 
       # ── 실패 시 백업 알림: GitHub 이슈 생성 → 계정 이메일로 알림 발송 ──
       - name: 실패 알림 이슈 생성
