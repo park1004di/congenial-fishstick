@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>미얀마 짯 환율 계산기 | 원화·달러·짯(MMK)</title>
+<meta name="description" content="원화·달러·짯을 자유롭게 변환! 환전소 예상 환율·중앙은행 환율·송금 환율 4가지 비교 + 예상 범위 표시">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    font-family:'Noto Sans KR', -apple-system, 'Malgun Gothic', sans-serif;
+    background: linear-gradient(160deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+    min-height:100vh; color:#222; padding-bottom:40px;
+  }
+  .wrap { max-width:480px; margin:0 auto; padding:0 14px; }
+
+  header { text-align:center; padding:34px 16px 22px; color:#fff; }
+  header .flag { font-size:40px; }
+  header h1 { font-size:22px; font-weight:900; margin-top:8px; letter-spacing:-0.5px; }
+  header p  { font-size:13px; opacity:.75; margin-top:6px; }
+
+  .card {
+    background:#fff; border-radius:20px; padding:20px;
+    box-shadow:0 10px 30px rgba(0,0,0,.25); margin-bottom:14px;
+  }
+
+  /* 통화 선택 칩 */
+  .cur-chips { display:flex; gap:8px; margin-bottom:12px; }
+  .cur-chips button {
+    flex:1; border:2px solid #e3e8ee; background:#fff; border-radius:12px;
+    padding:10px 4px; font-size:14px; font-weight:800; color:#78909c;
+    cursor:pointer; font-family:inherit; transition:all .15s;
+  }
+  .cur-chips button.active {
+    background:#2c5364; border-color:#2c5364; color:#fff;
+  }
+  .cur-chips button.active .cur-sub { color:rgba(255,255,255,.7); }
+  .cur-chips .cur-sub { display:block; font-size:10px; font-weight:500; color:#b0bec5; margin-top:2px; }
+
+  /* 입력 영역 */
+  .input-row { display:flex; align-items:center; gap:8px;
+    border:2px solid #e3e8ee; border-radius:14px; padding:4px 14px; transition:border-color .2s; }
+  .input-row:focus-within { border-color:#f5b942; }
+  .input-row .cur-tag { font-size:18px; font-weight:900; color:#2c5364; white-space:nowrap; }
+  #amountInput {
+    flex:1; border:none; outline:none; font-size:26px; font-weight:900;
+    text-align:right; padding:12px 0; color:#111; min-width:0; font-family:inherit;
+  }
+  .quick-btns { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .quick-btns button {
+    flex:1; min-width:64px; border:none; background:#eef3f7; color:#2c5364;
+    font-weight:700; font-size:12px; padding:10px 4px; border-radius:10px;
+    cursor:pointer; font-family:inherit; transition:background .15s;
+  }
+  .quick-btns button:active { background:#dce7ef; }
+
+  /* 변환 화살표 */
+  .swap-line { text-align:center; margin:-4px 0 10px; font-size:22px; color:#f5b942; font-weight:900; }
+
+  /* 메인 결과 */
+  .result-main {
+    background: linear-gradient(135deg, #f5b942 0%, #f08c1e 100%);
+    border-radius:20px; padding:20px; color:#fff; text-align:center;
+    box-shadow:0 10px 30px rgba(240,140,30,.35); margin-bottom:8px;
+  }
+  .result-main .label { font-size:13px; font-weight:700; opacity:.9; }
+  .result-main .label .badge { background:rgba(255,255,255,.25); border-radius:20px;
+    padding:2px 10px; font-size:11px; margin-left:6px; }
+  .result-main .value { font-size:34px; font-weight:900; margin:8px 0 2px; letter-spacing:-1px; word-break:break-all; }
+  .result-main .unit  { font-size:15px; font-weight:700; }
+  .result-main .sub   { font-size:12px; opacity:.85; margin-top:6px; }
+
+  /* 예상 범위 박스 */
+  .range-box {
+    background:#fff8ec; border:2px dashed #f0b04a; border-radius:16px;
+    padding:14px 16px; margin-bottom:14px; text-align:center;
+  }
+  .range-box .r-label { font-size:12px; font-weight:800; color:#b97a17; }
+  .range-box .r-value { font-size:19px; font-weight:900; color:#8a5a10; margin-top:6px; word-break:break-all; }
+  .range-box .r-note  { font-size:11px; color:#b59a6a; margin-top:6px; line-height:1.6; }
+
+  /* 4개 환율 카드 */
+  .rate-list h2 { font-size:15px; font-weight:900; color:#fff; margin:20px 4px 10px; }
+  .rate-item {
+    background:#fff; border-radius:16px; padding:16px 18px; margin-bottom:10px;
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    box-shadow:0 4px 14px rgba(0,0,0,.15); cursor:pointer; transition:transform .12s;
+  }
+  .rate-item:active { transform:scale(.98); }
+  .rate-item.selected { outline:3px solid #f5b942; }
+  .rate-item .info .name { font-size:14px; font-weight:700; color:#2c5364; }
+  .rate-item .info .desc { font-size:11px; color:#999; margin-top:3px; }
+  .rate-item .nums { text-align:right; flex-shrink:0; }
+  .rate-item .nums .mmk { font-size:17px; font-weight:900; color:#f08c1e; word-break:break-all; }
+  .rate-item .nums .per { font-size:11px; color:#999; margin-top:2px; }
+
+  .updated { text-align:center; font-size:11px; color:rgba(255,255,255,.65); margin:16px 0 4px; }
+  .refresh-btn {
+    display:block; margin:8px auto 0; border:none; cursor:pointer; font-family:inherit;
+    background:rgba(255,255,255,.15); color:#fff; font-size:12px; font-weight:700;
+    padding:9px 18px; border-radius:20px; transition:background .15s;
+  }
+  .refresh-btn:active { background:rgba(255,255,255,.3); }
+  .refresh-btn.loading { opacity:.6; pointer-events:none; }
+
+  /* 지난 환율 이력 */
+  .history { margin-top:24px; }
+  .history h2 { font-size:15px; font-weight:900; color:#fff; margin:0 4px 10px; }
+  .history-table { width:100%; border-collapse:collapse; background:#fff;
+    border-radius:16px; overflow:hidden; box-shadow:0 4px 14px rgba(0,0,0,.15);
+    font-size:12px; }
+  .history-table th { background:#2c5364; color:#fff; padding:10px 6px; font-weight:700; }
+  .history-table td { padding:9px 6px; text-align:center; border-bottom:1px solid #eef2f5; color:#37474f; }
+  .history-table tr:last-child td { border-bottom:none; }
+  .history-table td:first-child { font-weight:700; color:#2c5364; }
+  .history-empty { background:#fff; border-radius:16px; padding:18px; text-align:center;
+    font-size:12px; color:#90a4ae; box-shadow:0 4px 14px rgba(0,0,0,.15); }
+  .notice  { font-size:11px; color:rgba(255,255,255,.55); text-align:center; line-height:1.7; margin-top:6px; }
+
+  /* 광고 배너 */
+  .ads { margin-top:26px; }
+  .ads h2 { font-size:13px; font-weight:700; color:rgba(255,255,255,.6); margin:0 4px 10px; }
+  .ad-banner {
+    display:flex; align-items:center; gap:14px; text-decoration:none;
+    border-radius:16px; padding:18px; margin-bottom:10px; color:#fff;
+    box-shadow:0 6px 18px rgba(0,0,0,.25); transition:transform .12s;
+  }
+  .ad-banner:active { transform:scale(.98); }
+  .ad-img {
+    display:block; border-radius:16px; margin-bottom:10px; overflow:hidden;
+    box-shadow:0 6px 18px rgba(0,0,0,.25); transition:transform .12s;
+  }
+  .ad-img:active { transform:scale(.98); }
+  .ad-img img { display:block; width:100%; height:auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="flag">🇲🇲</div>
+    <h1>미얀마 짯 환율 계산기</h1>
+    <p>원화 · 달러 · 짯(MMK) 자유롭게 변환 + 예상 범위 표시</p>
+  </header>
+
+  <!-- 입력 카드 -->
+  <div class="card">
+    <div class="cur-chips" id="inChips">
+      <button data-cur="KRW" class="active">원화<span class="cur-sub">KRW ₩</span></button>
+      <button data-cur="USD">달러<span class="cur-sub">USD $</span></button>
+      <button data-cur="MMK">짯<span class="cur-sub">MMK K</span></button>
+    </div>
+    <div class="input-row">
+      <span class="cur-tag" id="inSymbol">₩</span>
+      <input id="amountInput" type="text" inputmode="numeric" placeholder="0" autocomplete="off">
+    </div>
+    <div class="quick-btns" id="quickBtns"></div>
+  </div>
+
+  <div class="swap-line">↓ 환산 ↓</div>
+
+  <!-- 출력 통화 선택 -->
+  <div class="card" style="padding:16px 20px;">
+    <div class="cur-chips" id="outChips" style="margin-bottom:0;">
+      <button data-cur="KRW">원화<span class="cur-sub">KRW ₩</span></button>
+      <button data-cur="USD">달러<span class="cur-sub">USD $</span></button>
+      <button data-cur="MMK" class="active">짯<span class="cur-sub">MMK K</span></button>
+    </div>
+  </div>
+
+  <!-- 메인 결과 -->
+  <div class="result-main">
+    <div class="label"><span id="mainRateName">환전소 예상 환율</span><span class="badge">적용 중</span></div>
+    <div class="value"><span id="mainResult">0</span> <span class="unit" id="mainUnit">짯(MMK)</span></div>
+    <div class="sub" id="mainRateSub"></div>
+  </div>
+
+  <!-- 예상 범위 -->
+  <div class="range-box">
+    <div class="r-label" id="rangeLabel">📊 실제 환전 예상 범위</div>
+    <div class="r-value" id="rangeValue">-</div>
+    <div class="r-note">환전소·거래처마다 환율이 달라질 수 있어요.</div>
+  </div>
+
+  <!-- 환율 선택 리스트 -->
+  <div class="rate-list">
+    <h2>💱 환율 선택 (터치하면 계산 기준이 바뀝니다)</h2>
+    <div id="rateItems"></div>
+  </div>
+
+  <div class="updated" id="updatedAt">환율 업데이트: 불러오는 중...</div>
+  <button class="refresh-btn" id="refreshBtn">🔄 최신 환율 불러오기</button>
+
+  <!-- 지난 환율 이력 (참고용, 정확한 값만 기록) -->
+  <div class="history">
+    <h2>📈 지난 환율 (최근 7일 · 1달러 기준)</h2>
+    <div id="historyBox"><div class="history-empty">환율 기록을 불러오는 중...</div></div>
+  </div>
+  <div class="notice">
+    ※ 미얀마는 중앙은행 공식환율과 환전소 환율이 크게 다릅니다.<br>
+    ※ 환전소 예상 환율은 참고용이며, 실제 환전 금액과 다를 수 있습니다.
+  </div>
+
+  <!-- ===== 광고 배너 (링크/문구 수정 시 이 부분만 바꾸면 됩니다) ===== -->
+  <div class="ads">
+    <h2>📢 미얀마 여행 파트너</h2>
+
+    <!-- 지니투어: 카카오톡 채널 채팅 바로 연결 -->
+    <a class="ad-img" href="http://pf.kakao.com/_xovhJG/chat" target="_blank" rel="noopener">
+      <img src="banner-genie.png" alt="지니투어 미얀마 - 미얀마 양곤 한국인 전문 여행사, 카카오톡으로 문의하기">
+    </a>
+
+    <!-- 고투미얀마: 네이버 카페 바로 연결 -->
+    <a class="ad-img" href="https://cafe.naver.com/templar777" target="_blank" rel="noopener">
+      <img src="banner-goto.png" alt="고투미얀마 - 미얀마 여행 정보, 네이버 카페 바로가기">
+    </a>
+  </div>
+  <!-- ===== 광고 배너 끝 ===== -->
+
+</div>
+
+<script>
+/* ===== 기본 환율 (rates.json 로드 실패 시 백업값, 2026-09-15 기준) ===== */
+let RATES = {
+  updated: "2026-09-15",
+  items: [
+    { key:"market",     name:"환전소 예상 환율",   desc:"현지 환전소 적용 예상 환율",      mmkPerUsd: 4366, mmkPerKrw: 3.22   },
+    { key:"cbm_market", name:"중앙은행 시장거래환율",   desc:"미얀마 중앙은행(CBM) 은행거래 고시", mmkPerUsd: 3660, mmkPerKrw: 2.7194 },
+    { key:"remit",      name:"해외송금 환율",           desc:"송금업체 적용 환율 (참고용)",       mmkPerUsd: 3973, mmkPerKrw: 2.95   },
+    { key:"cbm_ref",    name:"중앙은행 기준환율",       desc:"CBM 공식 기준 고시환율",            mmkPerUsd: 2100, mmkPerKrw: 1.5603 }
+  ]
+};
+
+const SYM = { KRW:"₩", USD:"$", MMK:"K" };
+const UNIT = { KRW:"원(KRW)", USD:"달러(USD)", MMK:"짯(MMK)" };
+const QUICK = {
+  KRW: [["1만원",10000],["5만원",50000],["10만원",100000],["50만원",500000],["100만원",1000000]],
+  USD: [["$10",10],["$50",50],["$100",100],["$500",500],["$1,000",1000]],
+  MMK: [["1만짯",10000],["5만짯",50000],["10만짯",100000],["50만짯",500000],["100만짯",1000000]]
+};
+
+let inCur = "KRW", outCur = "MMK", selectedKey = "market";
+const fmt = n => n.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
+
+  function getRate() { return RATES.items.find(r => r.key === selectedKey) || RATES.items[0]; }
+const RANGE_PCT = 0.9;  // 짯이 낀 변환: 하한 = 중심값의 90% (-10%)
+function usesMmk() { return inCur === "MMK" || outCur === "MMK"; }
+function currentAmount() {
+  const raw = document.getElementById('amountInput').value.replace(/[^0-9]/g, '');
+  return raw ? parseInt(raw, 10) : 0;
+}
+
+/* 입력값 → MMK 환산 */
+function toMmk(amount, cur, r) {
+  if (cur === "MMK") return amount;
+  if (cur === "USD") return amount * r.mmkPerUsd;
+  return amount * r.mmkPerKrw; // KRW
+}
+/* MMK → 출력통화 환산 */
+function fromMmk(mmk, cur, r) {
+  if (cur === "MMK") return mmk;
+  if (cur === "USD") return mmk / r.mmkPerUsd;
+  return mmk / r.mmkPerKrw; // KRW
+}
+
+function buildChips(containerId, cur, cb) {
+  const box = document.getElementById(containerId);
+  box.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('active', b.dataset.cur === cur);
+    b.onclick = () => cb(b.dataset.cur);
+  });
+}
+
+function renderQuickBtns() {
+  const box = document.getElementById('quickBtns');
+  box.innerHTML = '';
+  QUICK[inCur].forEach(([label, amt]) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = () => { document.getElementById('amountInput').value = amt; render(); };
+    box.appendChild(b);
+  });
+}
+
+function render() {
+  const r = getRate();
+  const amt = currentAmount();
+  document.getElementById('amountInput').value = amt ? fmt(amt) : '';
+  document.getElementById('inSymbol').textContent = SYM[inCur];
+
+  /* 메인 결과 */
+  const mmkMid = toMmk(amt, inCur, r);
+  const mid = fromMmk(mmkMid, outCur, r);
+  const prec = outCur === "USD" ? 2 : 0;  // 달러는 소수점 2자리까지 표시
+  const fmtOut = n => n.toLocaleString('ko-KR', { minimumFractionDigits: prec, maximumFractionDigits: prec });
+  document.getElementById('mainResult').textContent = fmtOut(mid);
+  document.getElementById('mainUnit').textContent = UNIT[outCur];
+  document.getElementById('mainRateName').textContent = r.name;
+  document.getElementById('mainRateSub').textContent =
+    `1달러 = ${fmt(r.mmkPerUsd)}짯 · 1원 = ${r.mmkPerKrw.toLocaleString('ko-KR',{maximumFractionDigits:4})}짯`;
+
+  /* 예상 범위: 짯이 낀 변환에만 -10% 하한 적용 (환전소는 더 주는 경우가 거의 없음) */
+  if (amt > 0 && usesMmk()) {
+    const low = mid * RANGE_PCT;
+    document.getElementById('rangeValue').textContent =
+      `${fmtOut(low)} ~ ${fmtOut(mid)} ${UNIT[outCur]}`;
+  } else if (amt > 0) {
+    // 원화↔달러: 공식환율이라 정확한 값만 표시
+    document.getElementById('rangeLabel').textContent = '✅ 공식 환율 적용 (오차 범위 없음)';
+    document.getElementById('rangeValue').textContent = `${fmt(mid)} ${UNIT[outCur]}`;
+  } else {
+    document.getElementById('rangeValue').textContent = '-';
+  }
+
+  /* 환율 카드 목록 */
+  const box = document.getElementById('rateItems');
+  box.innerHTML = '';
+  RATES.items.forEach(item => {
+    const v = fromMmk(toMmk(amt, inCur, item), outCur, item);
+    const div = document.createElement('div');
+    div.className = 'rate-item' + (item.key === selectedKey ? ' selected' : '');
+    div.innerHTML = `
+      <div class="info">
+        <div class="name">${item.name}</div>
+        <div class="desc">${item.desc}</div>
+      </div>
+      <div class="nums">
+        <div class="mmk">${fmtOut(v)} ${SYM[outCur]}</div>
+        <div class="per">1$ = ${fmt(item.mmkPerUsd)}짯</div>
+      </div>`;
+    div.onclick = () => { selectedKey = item.key; render(); };
+    box.appendChild(div);
+  });
+
+  if (usesMmk()) document.getElementById('rangeLabel').textContent = '📊 실제 환전 예상 범위';
+  document.getElementById('updatedAt').textContent =
+    `환율 업데이트: ${RATES.updated} · 매일 자동 갱신${liveStamp ? ' · ' + liveStamp : ''}`;
+  buildChips('inChips', inCur, c => { inCur = c; renderQuickBtns(); render(); });
+  buildChips('outChips', outCur, c => { outCur = c; render(); });
+}
+
+document.getElementById('amountInput').addEventListener('input', render);
+
+/* ===== 환율 자동 업데이트 =====
+   1단계: 같은 폴더의 rates.json (GitHub Actions가 매일 2회 자동 갱신)
+   2단계: 무료 실시간 API로 송금환율 즉시 보정 (접속할 때마다)            */
+let liveStamp = '';
+
+function applyRates(data, tag) {
+  if (data && data.items && data.items.length) {
+    RATES = data;
+    liveStamp = tag || '';
+    render();
+  }
+}
+
+/* 1단계: 저장된 최신 환율 로드 */
+function loadSavedRates() {
+  return fetch('rates.json?t=' + Date.now())
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(data => applyRates(data));
+}
+
+/* 2단계: 실시간 API로 중앙은행 기준환율 보정 (무료, 키 불필요)
+   - 이 API의 MMK 값은 공식 기준환율이라 cbm_ref에만 적용합니다.
+   - 환전소/송금 환율은 공식값과 달라서 rates.json(매일 수집) 값을 유지합니다. */
+function loadLiveRates() {
+  return Promise.all([
+    fetch('https://open.er-api.com/v6/latest/USD').then(r => r.json()),
+    fetch('https://open.er-api.com/v6/latest/KRW').then(r => r.json())
+  ]).then(([d1, d2]) => {
+    if (d1 && d1.rates && d1.rates.MMK && d2 && d2.rates && d2.rates.MMK) {
+      const item = RATES.items.find(i => i.key === 'cbm_ref');
+      if (item) {
+        item.mmkPerUsd = d1.rates.MMK;
+        item.mmkPerKrw = Math.round(d2.rates.MMK * 10000) / 10000;
+        liveStamp = '실시간 반영됨';
+        render();
+      }
+    }
+  });
+}
+
+function refreshAll(btn) {
+  if (btn) { btn.classList.add('loading'); btn.textContent = '⏳ 환율 불러오는 중...'; }
+  Promise.allSettled([loadSavedRates(), loadLiveRates()])
+    .finally(() => {
+      if (btn) { btn.classList.remove('loading'); btn.textContent = '🔄 최신 환율 불러오기'; }
+    });
+}
+
+document.getElementById('refreshBtn').addEventListener('click', function() { refreshAll(this); });
+
+/* ===== 지난 환율 이력 로드 (history.json, 참고용 정확한 값) ===== */
+function loadHistory() {
+  fetch('history.json?t=' + Date.now())
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(rows => {
+      const box = document.getElementById('historyBox');
+      if (!Array.isArray(rows) || !rows.length) {
+        box.innerHTML = '<div class="history-empty">아직 저장된 기록이 없습니다.<br>자동 갱신이 시작되면 매일 여기에 쌓입니다.</div>';
+        return;
+      }
+      const recent = rows.slice(-7).reverse();  // 최근 7일, 최신순
+      const fmtN = v => (v == null || v === '') ? '-' :
+        Number(v).toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+      let html = '<table class="history-table"><tr>' +
+        '<th>날짜</th><th>환전소<br>예상</th><th>중앙은행<br>시장거래</th><th>해외<br>송금</th><th>중앙은행<br>기준</th></tr>';
+      recent.forEach(r => {
+        html += `<tr><td>${(r.date||'').slice(5)}</td>` +
+          `<td>${fmtN(r.market_usd)}</td>` +
+          `<td>${fmtN(r.cbm_market_usd)}</td>` +
+          `<td>${fmtN(r.remit_usd)}</td>` +
+          `<td>${fmtN(r.cbm_ref_usd)}</td></tr>`;
+      });
+      html += '</table>';
+      box.innerHTML = html;
+    })
+    .catch(() => {
+      document.getElementById('historyBox').innerHTML =
+        '<div class="history-empty">아직 저장된 기록이 없습니다.<br>자동 갱신이 시작되면 매일 여기에 쌓입니다.</div>';
+    });
+}
+
+renderQuickBtns();
+render();
+refreshAll();  // 페이지 접속 시 자동으로 최신 환율 확인
+loadHistory(); // 지난 환율 기록 표시
+</script>
+</body>
+</html>
