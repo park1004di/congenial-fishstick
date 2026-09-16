@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-미얀마 짯(MMK) 환율 자동 수집 스크립트 (v10)
+미얀마 짯(MMK) 환율 자동 수집 스크립트 (v23)
 - 매일 2회 GitHub Actions가 실행하여 rates.json + 이력을 자동 갱신합니다.
-- 각 환율마다 주 소스 + 백업 소스를 두어, 하나가 막혀도 자동 전환됩니다.
+- 여러 출처에서 수집 후 중간값(median)을 사용 — 한 곳이 멈추거나 이상값을 내도 안전합니다.
 - 실행 결과를 status.json에 기록해서 실패 여부를 바로 확인할 수 있습니다.
 
-수집 소스:
-  ① 환전소 예상 환율   : 1차 egcurrency.com / 2차 egcurrency USD-KRW 역산
-  ② CBM 시장거래환율   : 1차 forex.cbm.gov.mm (미얀마 중앙은행 공식)
-  ③ 해외송금 환율      : 자동 소스 없음 (수동 관리, 이전 값 유지)
-  ④ CBM 기준환율       : 1차 forex.cbm.gov.mm / 2차 open.er-api.com
+수집 소스 (환율별 다중 출처):
+  ① 환전소 예상 환율   : 1차 setlive.myanmarnode.com / 2차 egcurrency.com (중간값)
+  ② 중앙은행 시장거래환율: forex.cbm.gov.mm (공식)
+  ③ 해외송금 환율      : Remitly + Western Union (둘의 중간값)
+  ④ 중앙은행 기준환율   : forex.cbm.gov.mm / 백업: open.er-api.com, xe.com
+  ⑤ 카드용 달러/원화   : open.er-api.com
 """
 
-import json, re, datetime, urllib.request, ssl, csv, os
+import json, re, datetime, urllib.request, ssl, csv, os, statistics
 
-UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,ko;q=0.8",
+    "Referer": "https://www.google.com/",
+}
 CTX = ssl.create_default_context()
 
 def fetch(url, timeout=30):
-    headers = {
-        **UA,
-        "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,ko;q=0.8",
-        "Referer": "https://www.google.com/",
-    }
-    req = urllib.request.Request(url, headers=headers)
+    req = urllib.request.Request(url, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
         return r.read().decode("utf-8", errors="ignore")
 
@@ -39,7 +39,12 @@ def load_prev():
     except Exception:
         return None
 
-# ── 소스별 수집 함수 ──────────────────────────────────────────────
+def median(values):
+    """수집된 값들의 중간값 — 이상값(극단치)에 평균보다 강함"""
+    vals = [v for v in values if v]
+    return round(statistics.median(vals), 2) if vals else None
+
+# ── 출처별 수집 함수 ─────────────────────────────────────────────
 
 def src_cbm_official():
     """미얀마 중앙은행 공식 페이지 → cbm_ref / cbm_market"""
@@ -48,20 +53,19 @@ def src_cbm_official():
     mk = re.search(r"Korean Won.*?KRW.*?100.*?([\d,]+\.\d+)\s*</td>\s*<td[^>]*>\s*([\d,]+\.\d+)", html, re.S)
     if not mu:
         raise ValueError("CBM 페이지에서 USD 환율 파싱 실패")
-    out = {}
-    out["cbm_ref"] = {"mmkPerUsd": num(mu.group(1))}
-    out["cbm_market"] = {"mmkPerUsd": num(mu.group(2))}
+    out = {"cbm_ref": {"mmkPerUsd": num(mu.group(1))},
+           "cbm_market": {"mmkPerUsd": num(mu.group(2))}}
     if mk:
         out["cbm_ref"]["mmkPerKrw"] = round(num(mk.group(1)) / 100, 4)
         out["cbm_market"]["mmkPerKrw"] = round(num(mk.group(2)) / 100, 4)
     return out
 
 def src_market_egcurrency():
-    """egcurrency 시장환율 페이지 → market"""
+    """egcurrency 시장환율 페이지 → market (백업 출처)"""
     html = fetch("https://egcurrency.com/en/currency/MMK/blackMarket")
     mu = re.search(r"USD[^0-9]*?([\d,]+\.?\d*)", html)
     if not mu:
-        raise ValueError("egcurrency 페이지에서 USD 환율 파싱 실패")
+        raise ValueError("egcurrency USD 파싱 실패")
     out = {"market": {"mmkPerUsd": num(mu.group(1))}}
     mk = re.search(r"KRW[^0-9]*?([\d,]+\.?\d*)", html)
     if mk:
@@ -69,10 +73,51 @@ def src_market_egcurrency():
         out["market"]["mmkPerKrw"] = round(v / 1000 if v > 100 else v, 4)
     return out
 
-def src_market_backup(usd_krw_rate):
-    """백업: 시장 달러환율 × 원/달러 환율로 원화 환산값 보완"""
-    d = json.loads(fetch("https://open.er-api.com/v6/latest/USD"))
-    return d["rates"].get("KRW")  # 1달러 = ?원
+def src_market_setlive():
+    """setlive.myanmarnode.com 시장환율 → market
+    페이지에 USD 매수/매도, KRW 매수/매도가 연속 숫자로 들어있음.
+    예: ['4300','4410', ...] → USD 매수=4300, 매도=4410 → 중간값 사용"""
+    html = fetch("https://setlive.myanmarnode.com/en/market-prices/currencies")
+    # 환율 숫자들 추출 (4자리 이상 또는 소수 포함)
+    vals = re.findall(r'([\d,]{3,}(?:\.\d+)?)', html)
+    vals = [num(v) for v in vals if v]
+    # USD 매수/매도 탐색: 4000~6000 범위 연속 2개
+    usd = None
+    for i in range(len(vals) - 1):
+        a, b = vals[i], vals[i + 1]
+        if 3500 < a < 6000 and 3500 < b < 6000 and b > a:
+            usd = (a + b) / 2  # 매수/매도 중간값
+            break
+    if not usd:
+        raise ValueError("setlive USD 파싱 실패")
+    # KRW 탐색: 2.5~4.5 범위 연속 2개
+    krw = None
+    for i in range(len(vals) - 1):
+        a, b = vals[i], vals[i + 1]
+        if 2.0 < a < 5.0 and 2.0 < b < 5.0 and b >= a:
+            krw = (a + b) / 2
+            break
+    out = {"market": {"mmkPerUsd": round(usd, 2)}}
+    if krw:
+        out["market"]["mmkPerKrw"] = round(krw, 4)
+    return out
+
+def src_remitly():
+    """Remitly 송금 환율 → remit"""
+    html = fetch("https://www.remitly.com/us/ko/currency-converter/usd-to-mmk-rate")
+    m = re.search(r"([\d,]+\.\d+)\s*MMK", html)
+    if not m:
+        raise ValueError("Remitly 파싱 실패")
+    return num(m.group(1))
+
+def src_westernunion():
+    """Western Union 송금 환율 → remit (페이지 구조가 자주 바뀌어 실패해도 괜찮은 보조 출처)"""
+    html = fetch("https://www.westernunion.com/us/en/currency-converter/usd-to-mmk-rate.html")
+    # '1.00 USD = 3,953.12 MMK' 형태의 패턴만 허용 (다른 큰 숫자 오수집 방지)
+    m = re.search(r"1(?:\.00)?\s*USD\s*(?:=|–|-|–)[^0-9]{0,40}?([\d,]{4}\.\d{2})", html)
+    if not m:
+        raise ValueError("WesternUnion 파싱 실패")
+    return num(m.group(1))
 
 def src_official_api():
     """백업: 무료 API → cbm_ref (공식 기준환율)"""
@@ -81,73 +126,135 @@ def src_official_api():
     return {"cbm_ref": {"mmkPerUsd": d1["rates"]["MMK"],
                         "mmkPerKrw": round(d2["rates"]["MMK"], 4)}}
 
+def src_xe():
+    """백업: xe.com 중간시장 환율 → cbm_ref"""
+    html = fetch("https://www.xe.com/en-us/currencyconverter/convert/?Amount=1&From=USD&To=MMK")
+    m = re.search(r"([\d,]+\.\d+)\s*MMK", html)
+    if not m:
+        raise ValueError("XE 파싱 실패")
+    return num(m.group(1))
+
+def src_usd_krw():
+    """카드 계산용 달러/원화 환율"""
+    d = json.loads(fetch("https://open.er-api.com/v6/latest/USD"))
+    return d["rates"].get("KRW")
+
 # ── 메인 ─────────────────────────────────────────────────────────
 
 def main():
     # GitHub Actions 서버는 UTC를 사용 → 한국시간(UTC+9)으로 변환해서 기록
-    kst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+    kst = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=9)
     today = kst.date().isoformat()
     now = kst.isoformat(timespec="seconds")
+
     prev = load_prev()
     prev_map = {i["key"]: i for i in prev["items"]} if prev else {}
     rates = {k: {"mmkPerUsd": v.get("mmkPerUsd"), "mmkPerKrw": v.get("mmkPerKrw")}
              for k, v in prev_map.items()}
 
     status = {"last_run": now, "sources": {}, "ok": True}
+    collected = {}  # {key: [출처별 수집값들]} — 중간값 계산용
 
-    def apply(data, key, source_name):
-        if key in data and data[key].get("mmkPerUsd"):
-            rates.setdefault(key, {}).update(data[key])
-            status["sources"][key] = {"ok": True, "source": source_name}
+    def collect(key, value, source_name):
+        if value:
+            collected.setdefault(key, []).append(value)
+            status["sources"].setdefault(key, {"ok": True, "source": []})
+            if isinstance(status["sources"][key]["source"], list):
+                status["sources"][key]["source"].append(source_name)
             return True
         return False
 
-    # ②④ CBM 공식 페이지 (1차)
+    # ②④ 중앙은행 공식 페이지
     try:
         data = src_cbm_official()
-        apply(data, "cbm_ref", "cbm.gov.mm")
-        apply(data, "cbm_market", "cbm.gov.mm")
-        print("CBM 공식 페이지 수집 성공:", rates.get("cbm_ref"), rates.get("cbm_market"))
+        collect("cbm_ref", data.get("cbm_ref", {}).get("mmkPerUsd"), "cbm.gov.mm")
+        collect("cbm_market", data.get("cbm_market", {}).get("mmkPerUsd"), "cbm.gov.mm")
+        # 원화 환산값은 중간값 대상이 아니라 그대로 적용
+        for k in ("cbm_ref", "cbm_market"):
+            if data.get(k, {}).get("mmkPerKrw"):
+                rates.setdefault(k, {})["mmkPerKrw"] = data[k]["mmkPerKrw"]
+        print("CBM 수집 성공:", data)
     except Exception as e:
         print("CBM 공식 페이지 실패:", e)
-        # ④ 기준환율 백업: 무료 API
+        # 기준환율 백업 출처들 (둘 다 시도해서 중간값)
+        for name, fn in [("open.er-api.com (백업)", lambda: src_official_api().get("cbm_ref", {}).get("mmkPerUsd")),
+                         ("xe.com (백업)", src_xe)]:
+            try:
+                v = fn()
+                collect("cbm_ref", v, name)
+                print(f"CBM 기준환율 백업({name}) 성공:", v)
+            except Exception as e2:
+                print(f"CBM 기준환율 백업({name}) 실패:", e2)
+
+    # ③ 해외송금 환율: Remitly + Western Union 중간값
+    for name, fn in [("remitly.com", src_remitly), ("westernunion.com", src_westernunion)]:
         try:
-            data = src_official_api()
-            apply(data, "cbm_ref", "open.er-api.com (백업)")
-            print("CBM 기준환율 백업 소스 성공:", rates.get("cbm_ref"))
-        except Exception as e2:
-            print("CBM 기준환율 백업도 실패:", e2)
-        status["sources"].setdefault("cbm_market", {"ok": False, "source": "없음 — 이전 값 유지"})
-        status["sources"].setdefault("cbm_ref", {"ok": False, "source": "없음 — 이전 값 유지"})
+            v = fn()
+            # 송금 환율 정상 범위 검증 (시장거래환율 근처여야 함, 공식 2100은 오수집)
+            if v and 3000 < v < 6000:
+                collect("remit", v, name)
+                print(f"송금환율({name}) 수집 성공:", v)
+            else:
+                print(f"송금환율({name}) 범위 이상값 무시:", v)
+        except Exception as e:
+            print(f"송금환율({name}) 실패:", e)
 
-    # ① 환전소 예상 환율 (1차: egcurrency)
+    # ① 환전소 예상 환율: setlive(1차) + egcurrency(2차) 중간값
+    for name, fn in [("setlive.myanmarnode.com", src_market_setlive),
+                     ("egcurrency.com", src_market_egcurrency)]:
+        try:
+            data = fn()
+            v = data.get("market", {}).get("mmkPerUsd")
+            if v and 3500 < v < 6000:
+                collect("market", v, name)
+                if data.get("market", {}).get("mmkPerKrw"):
+                    rates.setdefault("market", {})["mmkPerKrw"] = data["market"]["mmkPerKrw"]
+                print(f"환전소 예상 환율({name}) 수집 성공:", v)
+            else:
+                print(f"환전소 예상 환율({name}) 범위 이상값 무시:", v)
+        except Exception as e:
+            print(f"환전소 예상 환율({name}) 실패:", e)
+
+    # ── 중간값 적용 (여러 출처 수집 시 median) ─────────────────────
+    for key, vals in collected.items():
+        med = median(vals)
+        if med:
+            rates.setdefault(key, {})["mmkPerUsd"] = med
+            # 달러 환율이 새로 수집됐으면 원화 환산값도 다시 계산하도록 표시
+            rates[key]["mmkPerKrw"] = None
+            print(f"{key}: {len(vals)}개 출처 중간값 = {med} (수집값: {vals})")
+
+    # 원화 환산값이 없는 항목은 달러 기준으로 역산
     try:
-        data = src_market_egcurrency()
-        apply(data, "market", "egcurrency.com")
-        # 원화 환율이 없으면 달러 기준으로 역산
-        if not rates.get("market", {}).get("mmkPerKrw"):
-            krw_per_usd = src_market_backup(None)
-            if krw_per_usd and rates["market"].get("mmkPerUsd"):
-                rates["market"]["mmkPerKrw"] = round(rates["market"]["mmkPerUsd"] / krw_per_usd, 4)
-                print("시장환율 원화값 역산 적용:", rates["market"]["mmkPerKrw"])
-        print("시장환율 수집 성공:", rates.get("market"))
+        krw_per_usd = src_usd_krw()
+        if krw_per_usd:
+            for key in rates:
+                if rates[key].get("mmkPerUsd") and not rates[key].get("mmkPerKrw"):
+                    rates[key]["mmkPerKrw"] = round(rates[key]["mmkPerUsd"] / krw_per_usd, 4)
+                    print(f"{key} 원화값 역산: {rates[key]['mmkPerKrw']}")
     except Exception as e:
-        print("시장환율 수집 실패(이전 값 유지):", e)
-        status["sources"]["market"] = {"ok": False, "source": "없음 — 이전 값 유지"}
+        print("달러/원화 역산 실패:", e)
 
-    # ③ 해외송금 환율: 자동 수집 소스가 없어 이전 값 유지 (수동 관리)
-    status["sources"]["remit"] = {"ok": True, "source": "수동 관리 (이전 값 유지)"}
-    print("송금환율: 이전 값 유지:", rates.get("remit"))
+    # 카드 계산용 달러/원화 환율
+    card = {"usdKrw": 1400, "feePct": 2.5}
+    if prev and prev.get("card"):
+        card = dict(prev["card"])
+    try:
+        v = src_usd_krw()
+        if v:
+            card["usdKrw"] = round(v, 1)
+            print("달러/원화 환율 수집 성공:", card["usdKrw"])
+    except Exception as e:
+        print("달러/원화 환율 수집 실패(이전 값 유지):", e)
 
-    # 필수값 검증 — 하나라도 빠지면 실패로 표시 (알림 트리거용)
+    # ── 최종 조립 및 검증 ─────────────────────────────────────────
     meta = {
         "market":     ("환전소 예상 환율", "현지 환전소 적용 예상 환율"),
         "cbm_market": ("중앙은행 시장거래환율", "미얀마 중앙은행(CBM) 은행거래 고시"),
         "remit":      ("해외송금 환율", "송금업체 적용 환율 (참고용)"),
         "cbm_ref":    ("중앙은행 기준환율", "CBM 공식 기준 고시환율"),
     }
-    items = []
-    missing = []
+    items, missing = [], []
     for k in ["market", "cbm_market", "remit", "cbm_ref"]:
         v = rates.get(k, {})
         if v.get("mmkPerUsd") and v.get("mmkPerKrw"):
@@ -159,24 +266,12 @@ def main():
         status["ok"] = False
         status["missing"] = missing
 
-    # ── 카드결제 추정용 달러/원화 환율 수집 (전신환매도율 근사치) ───────
-    card = {"usdKrw": 1400, "feePct": 2.5}
-    if prev and prev.get("card"):
-        card = dict(prev["card"])
-    try:
-        d = json.loads(fetch("https://open.er-api.com/v6/latest/USD"))
-        if d.get("rates", {}).get("KRW"):
-            card["usdKrw"] = round(d["rates"]["KRW"], 1)
-            print("달러/원화 환율 수집 성공:", card["usdKrw"])
-    except Exception as e:
-        print("달러/원화 환율 수집 실패(이전 값 유지):", e)
-
     out = {"updated": today, "card": card, "items": items}
     with open("rates.json", "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     print("rates.json 갱신 완료:", today)
 
-    # ── 환율 이력 저장 (참고용, 오차 범위 없이 정확한 값만 기록) ──────────
+    # ── 환율 이력 저장 (참고용, 오차 범위 없이 정확한 값만 기록) ──
     row = {"date": today}
     for it in items:
         row[f"{it['key']}_usd"] = it["mmkPerUsd"]
@@ -184,7 +279,6 @@ def main():
 
     cols = ["date", "market_usd", "market_krw", "cbm_market_usd", "cbm_market_krw",
             "remit_usd", "remit_krw", "cbm_ref_usd", "cbm_ref_krw"]
-
     hist_rows = []
     if os.path.exists("history.csv"):
         with open("history.csv", encoding="utf-8-sig", newline="") as f:
@@ -195,16 +289,14 @@ def main():
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
         w.writerows(hist_rows)
-
     with open("history.json", "w", encoding="utf-8") as f:
         json.dump(hist_rows[-30:], f, ensure_ascii=False, indent=2)
-    print("history.csv / history.json 이력 저장 완료:", today, f"(총 {len(hist_rows)}일치)")
+    print("history 저장 완료:", today, f"(총 {len(hist_rows)}일치)")
 
-    # ── 수집 상태 기록 (외부에서 상태만 확인할 때 사용) ─────────────
+    # ── 수집 상태 기록 ─────────────────────────────────────────────
     with open("status.json", "w", encoding="utf-8") as f:
         json.dump(status, f, ensure_ascii=False, indent=2)
 
-    # 필수 환율이 빠졌으면 종료코드 1 → GitHub Actions 실패 → 이메일 알림 발송
     if not status["ok"]:
         print("⚠️ 수집 실패 항목 있음:", missing)
         raise SystemExit(1)

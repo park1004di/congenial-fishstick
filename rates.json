@@ -9,29 +9,29 @@
       "key": "market",
       "name": "환전소 예상 환율",
       "desc": "현지 환전소 적용 예상 환율",
-      "mmkPerUsd": 4366,
-      "mmkPerKrw": 3.22
+      "mmkPerUsd": 4355.0,
+      "mmkPerKrw": 3.2014
     },
     {
       "key": "cbm_market",
       "name": "중앙은행 시장거래환율",
       "desc": "미얀마 중앙은행(CBM) 은행거래 고시",
       "mmkPerUsd": 3660.0,
-      "mmkPerKrw": 2.6927
+      "mmkPerKrw": 2.6905
     },
     {
       "key": "remit",
       "name": "해외송금 환율",
       "desc": "송금업체 적용 환율 (참고용)",
-      "mmkPerUsd": 3973,
-      "mmkPerKrw": 2.95
+      "mmkPerUsd": 3946.8,
+      "mmkPerKrw": 2.9013
     },
     {
       "key": "cbm_ref",
       "name": "중앙은행 기준환율",
       "desc": "CBM 공식 기준 고시환율",
       "mmkPerUsd": 2100.0,
-      "mmkPerKrw": 1.545
+      "mmkPerKrw": 1.5437
     }
   ]
 }

@@ -1,21 +1,29 @@
 {
-  "last_run": "2026-09-16T11:44:57",
+  "last_run": "2026-09-16T12:00:31+00:00",
   "sources": {
     "cbm_ref": {
       "ok": true,
-      "source": "cbm.gov.mm"
+      "source": [
+        "cbm.gov.mm"
+      ]
     },
     "cbm_market": {
       "ok": true,
-      "source": "cbm.gov.mm"
-    },
-    "market": {
-      "ok": false,
-      "source": "없음 — 이전 값 유지"
+      "source": [
+        "cbm.gov.mm"
+      ]
     },
     "remit": {
       "ok": true,
-      "source": "수동 관리 (이전 값 유지)"
+      "source": [
+        "remitly.com"
+      ]
+    },
+    "market": {
+      "ok": true,
+      "source": [
+        "setlive.myanmarnode.com"
+      ]
     }
   },
   "ok": true
