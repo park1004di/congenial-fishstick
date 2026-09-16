@@ -73,33 +73,37 @@ def src_market_egcurrency():
         out["market"]["mmkPerKrw"] = round(v / 1000 if v > 100 else v, 4)
     return out
 
+def _setlive_series(cur):
+    """setlive 통화별 상세 페이지의 임베드 JSON에서 과거 시계열 추출"""
+    html = fetch(f"https://setlive.myanmarnode.com/en/market-prices/currencies/{cur}")
+    m = re.search(r'<script data-page="app" type="application/json">(.*?)</script>', html, re.S)
+    if not m:
+        raise ValueError(f"setlive {cur} 데이터 블록 없음")
+    days = json.loads(m.group(1))["props"]["days"]
+    rows = []
+    for d in days:
+        if d.get("quotes"):
+            q = d["quotes"][0]
+            rows.append({"date": d["date"], "buy": float(q["buy"]), "sell": float(q["sell"])})
+    rows.sort(key=lambda r: r["date"])
+    return rows
+
 def src_market_setlive():
-    """setlive.myanmarnode.com 시장환율 → market
-    페이지에 USD 매수/매도, KRW 매수/매도가 연속 숫자로 들어있음.
-    예: ['4300','4410', ...] → USD 매수=4300, 매도=4410 → 중간값 사용"""
-    html = fetch("https://setlive.myanmarnode.com/en/market-prices/currencies")
-    # 환율 숫자들 추출 (4자리 이상 또는 소수 포함)
-    vals = re.findall(r'([\d,]{3,}(?:\.\d+)?)', html)
-    vals = [num(v) for v in vals if v]
-    # USD 매수/매도 탐색: 4000~6000 범위 연속 2개
-    usd = None
-    for i in range(len(vals) - 1):
-        a, b = vals[i], vals[i + 1]
-        if 3500 < a < 6000 and 3500 < b < 6000 and b > a:
-            usd = (a + b) / 2  # 매수/매도 중간값
-            break
-    if not usd:
-        raise ValueError("setlive USD 파싱 실패")
-    # KRW 탐색: 2.5~4.5 범위 연속 2개
-    krw = None
-    for i in range(len(vals) - 1):
-        a, b = vals[i], vals[i + 1]
-        if 2.0 < a < 5.0 and 2.0 < b < 5.0 and b >= a:
-            krw = (a + b) / 2
-            break
-    out = {"market": {"mmkPerUsd": round(usd, 2)}}
-    if krw:
-        out["market"]["mmkPerKrw"] = round(krw, 4)
+    """setlive 시장환율 → market (매수/매도 중간값, 과거 시계열 포함)"""
+    usd = _setlive_series("usd")
+    krw = {r["date"]: r for r in _setlive_series("krw")}
+    latest = usd[-1]
+    out = {"market": {"mmkPerUsd": round((latest["buy"] + latest["sell"]) / 2, 2)}}
+    k = krw.get(latest["date"])
+    if k:
+        out["market"]["mmkPerKrw"] = round((k["buy"] + k["sell"]) / 2, 4)
+    # 과거 이력도 함께 반환 (이력 채우기용)
+    out["_history"] = [
+        {"date": r["date"], "market_usd": round((r["buy"] + r["sell"]) / 2, 2),
+         "market_krw": (round((krw[r["date"]]["buy"] + krw[r["date"]]["sell"]) / 2, 4)
+                        if r["date"] in krw else None)}
+        for r in usd
+    ]
     return out
 
 def src_remitly():
@@ -154,6 +158,7 @@ def main():
 
     status = {"last_run": now, "sources": {}, "ok": True}
     collected = {}  # {key: [출처별 수집값들]} — 중간값 계산용
+    src_market_setlive_history = []  # setlive 과거 시계열 (이력 백필용)
 
     def collect(key, value, source_name):
         if value:
@@ -209,6 +214,8 @@ def main():
                 collect("market", v, name)
                 if data.get("market", {}).get("mmkPerKrw"):
                     rates.setdefault("market", {})["mmkPerKrw"] = data["market"]["mmkPerKrw"]
+                if data.get("_history"):
+                    src_market_setlive_history = data["_history"]
                 print(f"환전소 예상 환율({name}) 수집 성공:", v)
             else:
                 print(f"환전소 예상 환율({name}) 범위 이상값 무시:", v)
@@ -283,6 +290,24 @@ def main():
     if os.path.exists("history.csv"):
         with open("history.csv", encoding="utf-8-sig", newline="") as f:
             hist_rows = [r for r in csv.DictReader(f) if r.get("date") != today]
+
+    # setlive 과거 시계열로 빠진 날짜의 시장환율 백필 (있으면)
+    backfilled = 0
+    if collected.get("market") and src_market_setlive_history:
+        by_date = {r["date"]: r for r in hist_rows}
+        for p in src_market_setlive_history:
+            if p["date"] == today:
+                continue
+            r = by_date.setdefault(p["date"], {"date": p["date"]})
+            if not r.get("market_usd"):
+                r["market_usd"] = p["market_usd"]
+                backfilled += 1
+            if p.get("market_krw") and not r.get("market_krw"):
+                r["market_krw"] = p["market_krw"]
+        hist_rows = list(by_date.values())
+        if backfilled:
+            print(f"과거 시장환율 백필: {backfilled}일치 추가")
+
     hist_rows.append(row)
     hist_rows.sort(key=lambda r: r["date"])
     with open("history.csv", "w", encoding="utf-8-sig", newline="") as f:
