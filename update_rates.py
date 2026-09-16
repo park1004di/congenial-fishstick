@@ -318,6 +318,28 @@ def main():
         json.dump(hist_rows[-30:], f, ensure_ascii=False, indent=2)
     print("history 저장 완료:", today, f"(총 {len(hist_rows)}일치)")
 
+    # ── 환율 변동 로그 (값이 바뀔 때만 추가, N 표시용) ──────────────
+    market_item = next((i for i in items if i["key"] == "market"), None)
+    if market_item:
+        log = []
+        if os.path.exists("market_log.json"):
+            try:
+                with open("market_log.json", encoding="utf-8") as f:
+                    log = json.load(f)
+            except Exception:
+                log = []
+        last_usd = log[-1]["usd"] if log else None
+        cur_usd = market_item["mmkPerUsd"]
+        if last_usd != cur_usd:  # 값이 바뀐 경우에만 기록
+            log.append({"t": kst.strftime("%Y-%m-%d %H:%M"),
+                        "usd": cur_usd, "krw": market_item["mmkPerKrw"]})
+            log = log[-100:]  # 최근 100건만 유지
+            with open("market_log.json", "w", encoding="utf-8") as f:
+                json.dump(log, f, ensure_ascii=False, indent=2)
+            print(f"환율 변동 기록: {last_usd} → {cur_usd}")
+        else:
+            print("환율 변동 없음 (로그 추가 생략)")
+
     # ── 수집 상태 기록 ─────────────────────────────────────────────
     with open("status.json", "w", encoding="utf-8") as f:
         json.dump(status, f, ensure_ascii=False, indent=2)

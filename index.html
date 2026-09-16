@@ -131,6 +131,22 @@
   .refresh-btn:active { background:rgba(255,255,255,.3); }
   .refresh-btn.loading { opacity:.6; pointer-events:none; }
 
+  /* 환율 변동 로그 */
+  .chglog { margin-top:24px; }
+  .chglog h2 { font-size:15px; font-weight:900; color:#fff; margin:0 4px 10px; }
+  .chg-list { background:#fff; border-radius:16px; padding:6px 0;
+    box-shadow:0 4px 14px rgba(0,0,0,.15); overflow:hidden; }
+  .chg-item { display:flex; align-items:center; gap:10px; padding:10px 16px;
+    border-bottom:1px solid #f0f4f7; font-size:13px; }
+  .chg-item:last-child { border-bottom:none; }
+  .chg-item .t { color:#78909c; font-size:12px; white-space:nowrap; }
+  .chg-item .v { margin-left:auto; font-weight:900; color:#2c5364; }
+  .chg-item .v small { display:block; text-align:right; font-weight:500;
+    font-size:11px; color:#90a4ae; }
+  .chg-badge { background:#2e7d32; color:#fff; font-size:10px; font-weight:900;
+    border-radius:6px; padding:2px 7px; }
+  .chg-empty { padding:16px; text-align:center; font-size:12px; color:#90a4ae; }
+
   /* 지난 환율 이력 */
   .history { margin-top:24px; }
   .history h2 { font-size:15px; font-weight:900; color:#fff; margin:0 4px 10px; }
@@ -236,6 +252,12 @@
       </div>
       <div class="cp-note">짯 금액을 입력하면 카드 청구 예상액이 바로 표시됩니다.<br>해당 금액은 카드사별로 다를 수 있습니다.</div>
     </div>
+  </div>
+
+  <!-- 환율 변동 기록 (값이 바뀔 때만 기록) -->
+  <div class="chglog">
+    <h2>🕐 환율 변동 기록 (환전소 예상 환율)</h2>
+    <div class="chg-list" id="chgList"><div class="chg-empty">변동 기록을 불러오는 중...</div></div>
   </div>
 
   <!-- 지난 환율 이력 (참고용, 정확한 값만 기록) -->
@@ -484,6 +506,31 @@ function refreshAll(btn) {
 
 document.getElementById('refreshBtn').addEventListener('click', function() { refreshAll(this); });
 
+/* ===== 환율 변동 로그 (market_log.json, 값이 바뀐 때만 기록됨) ===== */
+function loadChangeLog() {
+  fetch('market_log.json?t=' + Date.now())
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(log => {
+      const box = document.getElementById('chgList');
+      if (!Array.isArray(log) || !log.length) {
+        box.innerHTML = '<div class="chg-empty">아직 변동 기록이 없습니다.<br>환율이 바뀌면 여기에 시간과 함께 기록됩니다.</div>';
+        return;
+      }
+      const fmtN = v => Number(v).toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+      const items = log.slice(-7).reverse();  // 최근 7건, 최신순
+      box.innerHTML = items.map((e, i) => `
+        <div class="chg-item">
+          ${i === 0 ? '<span class="chg-badge">N</span>' : ''}
+          <span class="t">${e.t}</span>
+          <span class="v">1$ = ${fmtN(e.usd)}짯<small>1원 = ${fmtN(e.krw)}짯</small></span>
+        </div>`).join('');
+    })
+    .catch(() => {
+      document.getElementById('chgList').innerHTML =
+        '<div class="chg-empty">아직 변동 기록이 없습니다.<br>환율이 바뀌면 여기에 시간과 함께 기록됩니다.</div>';
+    });
+}
+
 /* ===== 지난 환율 이력 로드 (history.json, 참고용 정확한 값) ===== */
 function loadHistory() {
   fetch('history.json?t=' + Date.now())
@@ -526,6 +573,7 @@ renderQuickBtns();
 document.getElementById('amountInput').value = '1';  // 첫 화면: 1달러 기준
 render();
 refreshAll();  // 페이지 접속 시 자동으로 최신 환율 확인 (날짜+시각 표시)
+loadChangeLog(); // 환율 변동 기록 표시
 </script>
 </body>
 </html>
