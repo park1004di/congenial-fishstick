@@ -174,12 +174,12 @@
   <!-- 입력 카드 -->
   <div class="card">
     <div class="cur-chips" id="inChips">
-      <button data-cur="KRW" class="active">원화<span class="cur-sub">KRW ₩</span></button>
-      <button data-cur="USD">달러<span class="cur-sub">USD $</span></button>
+      <button data-cur="KRW">원화<span class="cur-sub">KRW ₩</span></button>
+      <button data-cur="USD" class="active">달러<span class="cur-sub">USD $</span></button>
       <button data-cur="MMK">짯<span class="cur-sub">MMK K</span></button>
     </div>
     <div class="input-row">
-      <span class="cur-tag" id="inSymbol">₩</span>
+      <span class="cur-tag" id="inSymbol">$</span>
       <input id="amountInput" type="text" inputmode="numeric" placeholder="0" autocomplete="off">
     </div>
     <div class="quick-btns" id="quickBtns"></div>
@@ -298,7 +298,7 @@ const QUICK = {
   MMK: [["1만짯",10000],["5만짯",50000],["10만짯",100000],["50만짯",500000],["100만짯",1000000]]
 };
 
-let inCur = "KRW", outCur = "MMK", selectedKey = "market";
+let inCur = "USD", outCur = "MMK", selectedKey = "market";
 const fmt = n => n.toLocaleString('ko-KR', { maximumFractionDigits: 0 });
 
   function getRate() { return RATES.items.find(r => r.key === selectedKey) || RATES.items[0]; }
@@ -394,8 +394,7 @@ function render() {
   });
 
   if (usesMmk()) document.getElementById('rangeLabel').textContent = '📊 실제 환전 예상 범위';
-  document.getElementById('updatedAt').textContent =
-    `환율 업데이트: ${RATES.updated} · 매일 자동 갱신${liveStamp ? ' · ' + liveStamp : ''}`;
+  document.getElementById('updatedAt').textContent = liveStamp || `환율 업데이트: ${RATES.updated}`;
   buildChips('inChips', inCur, c => { inCur = c; renderQuickBtns(); render(); });
   buildChips('outChips', outCur, c => { outCur = c; render(); });
 }
@@ -435,14 +434,16 @@ function applyRates(data, tag) {
   }
 }
 
-/* 1단계: 저장된 최신 환율 로드 */
+/* 1단계: 저장된 최신 환율 로드 (환전소/송금/중앙은행 환율 포함 전체) */
 function loadSavedRates() {
-  return fetch('rates.json?t=' + Date.now())
+  const bust = '?t=' + Date.now();
+  return fetch('rates.json' + bust)
     .then(r => r.ok ? r.json() : Promise.reject())
-    .then(data => applyRates(data));
+    .then(data => applyRates(data))
+    .then(() => fetch('history.json' + bust).then(r => r.ok ? r.json() : Promise.reject()).then(showHistory).catch(() => {}));
 }
 
-/* 2단계: 실시간 API로 중앙은행 기준환율 보정 (무료, 키 불필요)
+/* 2단계: 실시간 API로 중앙은행 기준환율 + 카드용 달러/원화 환율 갱신 (무료, 키 불필요)
    - 이 API의 MMK 값은 공식 기준환율이라 cbm_ref에만 적용합니다.
    - 환전소/송금 환율은 공식값과 달라서 rates.json(매일 수집) 값을 유지합니다. */
 function loadLiveRates() {
@@ -455,9 +456,14 @@ function loadLiveRates() {
       if (item) {
         item.mmkPerUsd = d1.rates.MMK;
         item.mmkPerKrw = Math.round(d2.rates.MMK * 10000) / 10000;
-        liveStamp = '실시간 반영됨';
-        render();
       }
+      // 카드 계산용 달러/원화 환율도 실시간 갱신
+      if (d1.rates.KRW) {
+        if (!RATES.card) RATES.card = {};
+        RATES.card.usdKrw = Math.round(d1.rates.KRW * 10) / 10;
+      }
+      render();
+      renderCardPay();
     }
   });
 }
@@ -466,6 +472,12 @@ function refreshAll(btn) {
   if (btn) { btn.classList.add('loading'); btn.textContent = '⏳ 환율 불러오는 중...'; }
   Promise.allSettled([loadSavedRates(), loadLiveRates()])
     .finally(() => {
+      // 갱신 완료 시각 표시 (한국시간 기준)
+      const now = new Date();
+      const kst = new Date(now.getTime() + (9 * 60 + now.getTimezoneOffset()) * 60000);
+      const pad = n => String(n).padStart(2, '0');
+      liveStamp = `환율 업데이트: ${kst.getFullYear()}-${pad(kst.getMonth()+1)}-${pad(kst.getDate())} ${pad(kst.getHours())}:${pad(kst.getMinutes())}`;
+      render();
       if (btn) { btn.classList.remove('loading'); btn.textContent = '🔄 최신 환율 불러오기'; }
     });
 }
@@ -476,7 +488,14 @@ document.getElementById('refreshBtn').addEventListener('click', function() { ref
 function loadHistory() {
   fetch('history.json?t=' + Date.now())
     .then(r => r.ok ? r.json() : Promise.reject())
-    .then(rows => {
+    .then(rows => showHistory(rows))
+    .catch(() => {
+      document.getElementById('historyBox').innerHTML =
+        '<div class="history-empty">아직 저장된 기록이 없습니다.<br>자동 갱신이 시작되면 매일 여기에 쌓입니다.</div>';
+    });
+}
+
+function showHistory(rows) {
       const box = document.getElementById('historyBox');
       if (!Array.isArray(rows) || !rows.length) {
         box.innerHTML = '<div class="history-empty">아직 저장된 기록이 없습니다.<br>자동 갱신이 시작되면 매일 여기에 쌓입니다.</div>';
@@ -496,11 +515,6 @@ function loadHistory() {
       });
       html += '</table>';
       box.innerHTML = html;
-    })
-    .catch(() => {
-      document.getElementById('historyBox').innerHTML =
-        '<div class="history-empty">아직 저장된 기록이 없습니다.<br>자동 갱신이 시작되면 매일 여기에 쌓입니다.</div>';
-    });
 }
 
 /* ===== 배너 표시/숨김 적용 (위쪽 설정 스위치에 따라) ===== */
@@ -509,9 +523,9 @@ if (!SHOW_GENIE_BANNER) document.getElementById('bannerGenie').style.display = '
 if (!SHOW_GOTO_BANNER)  document.getElementById('bannerGoto').style.display  = 'none';
 
 renderQuickBtns();
+document.getElementById('amountInput').value = '1';  // 첫 화면: 1달러 기준
 render();
-refreshAll();  // 페이지 접속 시 자동으로 최신 환율 확인
-loadHistory(); // 지난 환율 기록 표시
+refreshAll();  // 페이지 접속 시 자동으로 최신 환율 확인 (날짜+시각 표시)
 </script>
 </body>
 </html>
