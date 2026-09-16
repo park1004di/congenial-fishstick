@@ -1,6 +1,17 @@
 [
   {
     "date": "2026-09-15",
+    "market_usd": "4366",
+    "market_krw": "3.22",
+    "cbm_market_usd": "3660.0",
+    "cbm_market_krw": "2.7194",
+    "remit_usd": "3973",
+    "remit_krw": "2.95",
+    "cbm_ref_usd": "2100.0",
+    "cbm_ref_krw": "1.5603"
+  },
+  {
+    "date": "2026-09-16",
     "market_usd": 4366,
     "market_krw": 3.22,
     "cbm_market_usd": 3660.0,

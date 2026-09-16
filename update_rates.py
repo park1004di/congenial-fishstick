@@ -84,8 +84,10 @@ def src_official_api():
 # ── 메인 ─────────────────────────────────────────────────────────
 
 def main():
-    today = datetime.date.today().isoformat()
-    now = datetime.datetime.now().isoformat(timespec="seconds")
+    # GitHub Actions 서버는 UTC를 사용 → 한국시간(UTC+9)으로 변환해서 기록
+    kst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+    today = kst.date().isoformat()
+    now = kst.isoformat(timespec="seconds")
     prev = load_prev()
     prev_map = {i["key"]: i for i in prev["items"]} if prev else {}
     rates = {k: {"mmkPerUsd": v.get("mmkPerUsd"), "mmkPerKrw": v.get("mmkPerKrw")}
