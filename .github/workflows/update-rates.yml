@@ -1,13 +1,15 @@
-# GitHub Actions: 매일 2회 환율 자동 갱신 + 실패 시 이메일 알림
-# 한국시간 07시(UTC 22시) / 한국시간 19시(UTC 10시)
+# GitHub Actions: 환율 자동 갱신 + 실패 시 이메일 알림
+# 미얀마 시간(UTC+6:30) 오전 9시 ~ 오후 9시 사이 30분 간격으로 확인
+# = UTC 02:30, 그리고 03:00~14:30 매시간 00분/30분
+# 밤 시간대(미얀마 21:30~익일 08:30)는 변동이 거의 없어 실행하지 않음
 # 사용법: 이 파일을 저장소의 .github/workflows/ 폴더에 넣으세요
 # 배포: Cloudflare Pages가 main 브랜치 변경(커밋)을 감지해 자동 재배포합니다 (별도 설정 불필요)
 name: Update MMK exchange rates
 
 on:
   schedule:
-    - cron: "0 22 * * *"   # 매일 22:00 UTC = 한국시간 07:00
-    - cron: "0 10 * * *"   # 매일 10:00 UTC = 한국시간 19:00
+    - cron: "30 2 * * *"       # UTC 02:30 = 미얀마 09:00 (아침 환율 변동 시점)
+    - cron: "0,30 3-14 * * *"  # UTC 03:00~14:30 30분 간격 = 미얀마 09:30 ~ 21:00
   workflow_dispatch:        # 수동 실행 버튼도 활성화
 
 permissions:
@@ -26,13 +28,18 @@ jobs:
       - name: Fetch latest rates
         run: python update_rates.py
 
-      - name: Commit updated files
+      - name: Commit updated files (changed rates only)
         run: |
           git config user.name "rate-bot"
           git config user.email "rate-bot@users.noreply.github.com"
           git add rates.json history.csv history.json status.json market_log.json gold.json petrol.json
-          git diff --cached --quiet || git commit -m "chore: 환율 자동 갱신 $(date +%Y-%m-%d)"
-          git push
+          # rates.json의 updated 날짜나 실제 환율 값이 바뀐 경우에만 커밋 (시간만 달라진 빈 커밋 방지)
+          if git diff --cached --quiet; then
+            echo "환율 변경 없음 — 커밋 생략"
+          else
+            git commit -m "chore: 환율 갱신 $(date -u +%Y-%m-%d) $(date -u +%H:%M) UTC"
+            git push
+          fi
 
       # ── 실패 시 백업 알림: GitHub 이슈 생성 → 계정 이메일로 알림 발송 ──
       - name: 실패 알림 이슈 생성
