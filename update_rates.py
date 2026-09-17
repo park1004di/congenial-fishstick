@@ -143,6 +143,60 @@ def src_usd_krw():
     d = json.loads(fetch("https://open.er-api.com/v6/latest/USD"))
     return d["rates"].get("KRW")
 
+def _setlive_props(path):
+    """setlive 페이지의 임베드 JSON props 추출"""
+    html = fetch(f"https://setlive.myanmarnode.com/en/market-prices/{path}")
+    m = re.search(r'<script data-page="app" type="application/json">(.*?)</script>', html, re.S)
+    if not m:
+        raise ValueError(f"setlive {path} 데이터 블록 없음")
+    return json.loads(m.group(1))["props"]
+
+def src_gold():
+    """금 시세: 세계 금 + 미얀마 금 → gold.json용 데이터"""
+    p = _setlive_props("gold")
+    wg = p.get("worldGold", {})
+    out = {"updated_at": p.get("asOf", ""), "world": None, "myanmar": []}
+    if wg.get("quote"):
+        q = wg["quote"]
+        out["world"] = {
+            "usd_per_oz": float(q["rate"]),
+            "change": float(q.get("change") or 0),
+            "usd_per_gram": float(wg.get("per_gram_usd") or 0),
+            "usd_per_kyattha": float(wg.get("per_kyattha_usd") or 0),
+        }
+    for item in p.get("gold", []):
+        if not item.get("quote"):
+            continue
+        out["myanmar"].append({
+            "code": item["series"]["code"],
+            "name": item["series"]["name"]["en"],
+            "buy": float(item["quote"]["buy"]),
+            "sell": float(item["quote"]["sell"]),
+            "buy_change": float(item["quote"].get("buy_change") or 0),
+            "sell_change": float(item["quote"].get("sell_change") or 0),
+        })
+    if not out["myanmar"]:
+        raise ValueError("금 데이터 없음")
+    return out
+
+def src_petrol():
+    """기름값: 양곤 기준 유종별 리터당 짯 → petrol.json용 데이터"""
+    p = _setlive_props("petrol")
+    out = {"updated_at": p.get("asOf", ""),
+           "region": p.get("region", {}).get("name", {}).get("en", "Yangon"), "items": []}
+    for item in p.get("items", []):
+        if not item.get("quote"):
+            continue
+        out["items"].append({
+            "code": item["series"]["code"],
+            "name": item["series"]["name"]["en"],
+            "rate": float(item["quote"]["rate"]),
+            "change": float(item["quote"].get("change") or 0),
+        })
+    if not out["items"]:
+        raise ValueError("기름 데이터 없음")
+    return out
+
 # ── 메인 ─────────────────────────────────────────────────────────
 
 def main():
@@ -339,6 +393,19 @@ def main():
             print(f"환율 변동 기록: {last_usd} → {cur_usd}")
         else:
             print("환율 변동 없음 (로그 추가 생략)")
+
+    # ── 금 / 기름 데이터 수집 (별도 페이지용) ─────────────────────
+    for fname, fn in [("gold.json", src_gold), ("petrol.json", src_petrol)]:
+        try:
+            data = fn()
+            data["date"] = today
+            with open(fname, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            status["sources"][fname.replace(".json", "")] = {"ok": True, "source": "setlive.myanmarnode.com"}
+            print(f"{fname} 수집 성공")
+        except Exception as e:
+            print(f"{fname} 수집 실패(이전 파일 유지):", e)
+            status["sources"][fname.replace(".json", "")] = {"ok": False, "source": "실패 — 이전 값 유지"}
 
     # ── 수집 상태 기록 ─────────────────────────────────────────────
     with open("status.json", "w", encoding="utf-8") as f:

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>미얀마 기름값 | 양곤 유종별 리터당 가격</title>
+<meta name="description" content="미얀마 기름값 — 양곤 기준 휘발유·디젤 리터당 짯 가격을 매일 업데이트">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    font-family:'Noto Sans KR', -apple-system, 'Malgun Gothic', sans-serif;
+    background: linear-gradient(160deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+    min-height:100vh; color:#222; padding-bottom:40px;
+  }
+  .wrap { max-width:480px; margin:0 auto; padding:0 14px; }
+  header { text-align:center; padding:30px 16px 18px; color:#fff; }
+  header .flag { font-size:40px; }
+  header h1 { font-size:22px; font-weight:900; margin-top:8px; letter-spacing:-0.5px; }
+  header p  { font-size:13px; opacity:.75; margin-top:6px; }
+
+  /* 탭 메뉴 */
+  .tabs { display:flex; gap:8px; margin:0 0 16px; }
+  .tabs a {
+    flex:1; text-align:center; text-decoration:none; font-family:inherit;
+    font-size:13px; font-weight:800; padding:11px 4px; border-radius:12px;
+    background:rgba(255,255,255,.12); color:rgba(255,255,255,.75); transition:background .15s;
+  }
+  .tabs a.active { background:#66bb6a; color:#10261a; }
+
+  .card {
+    background:#fff; border-radius:20px; padding:20px;
+    box-shadow:0 10px 30px rgba(0,0,0,.25); margin-bottom:14px;
+  }
+
+  /* 기름 항목 */
+  .fuel-item {
+    background:#fff; border-radius:16px; padding:16px 18px; margin-bottom:10px;
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    box-shadow:0 4px 14px rgba(0,0,0,.15);
+  }
+  .fuel-item .info .fname { font-size:15px; font-weight:800; color:#2c5364; }
+  .fuel-item .info .fsub  { font-size:11px; color:#999; margin-top:3px; }
+  .fuel-item .nums { text-align:right; flex-shrink:0; }
+  .fuel-item .nums .frate { font-size:19px; font-weight:900; color:#2e7d32; }
+  .fuel-item .nums .fchg  { font-size:11px; margin-top:2px; }
+  .chg-up   { color:#c62828; font-weight:800; }
+  .chg-down { color:#1565c0; font-weight:800; }
+  .chg-zero { color:#78909c; font-weight:800; }
+
+  .updated { text-align:center; font-size:11px; color:rgba(255,255,255,.65); margin:16px 0 4px; }
+  .notice  { font-size:11px; color:rgba(255,255,255,.55); text-align:center; line-height:1.7; margin-top:6px; }
+
+  /* 광고 배너 */
+  .ads { margin-top:26px; }
+  .ads h2 { font-size:13px; font-weight:700; color:rgba(255,255,255,.6); margin:0 4px 10px; }
+  .ad-img {
+    display:block; border-radius:16px; margin-bottom:10px; overflow:hidden;
+    box-shadow:0 6px 18px rgba(0,0,0,.25); transition:transform .12s;
+  }
+  .ad-img:active { transform:scale(.98); }
+  .ad-img img { display:block; width:100%; height:auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="flag">⛽</div>
+    <h1>미얀마 기름값</h1>
+    <p>양곤 기준 유종별 리터당 가격 (짯)</p>
+  </header>
+
+  <!-- 탭 메뉴 -->
+  <div class="tabs">
+    <a href="index.html">💱 환율</a>
+    <a href="gold.html">🥇 금</a>
+    <a href="petrol.html" class="active">⛽ 기름</a>
+  </div>
+
+  <h2 style="font-size:15px; font-weight:900; color:#fff; margin:0 4px 10px;" id="regionTitle">⛽ 오늘의 기름값 (리터당)</h2>
+  <div id="fuelList"></div>
+
+  <div class="updated" id="updatedAt">불러오는 중...</div>
+  <div class="notice">
+    ※ 양곤 지역 기준 시세이며 지역·주유소별로 다를 수 있습니다.<br>
+    ※ Diesel: 경유 / Premium Diesel: 고급 경유 / RON92·RON95: 휘발유
+  </div>
+
+  <!-- ===== 광고 배너 ===== -->
+  <div class="ads">
+    <h2>📢 미얀마 여행 파트너</h2>
+    <a class="ad-img" id="bannerGenie" href="http://pf.kakao.com/_xovhJG/chat" target="_blank" rel="noopener">
+      <img src="banner-genie.png" alt="지니투어 미얀마 - 카카오톡으로 문의하기">
+    </a>
+    <a class="ad-img" id="bannerGoto" href="https://cafe.naver.com/templar777" target="_blank" rel="noopener">
+      <img src="banner-goto.png" alt="고투미얀마 - 네이버 카페 바로가기">
+    </a>
+    <a class="ad-img" id="bannerChat" href="https://open.kakao.com/o/gHQQtHE" target="_blank" rel="noopener">
+      <img src="banner-chat.jpg" alt="미얀마 여행자 단톡방 - 카카오톡 오픈채팅 참여하기">
+    </a>
+  </div>
+
+</div>
+
+<script>
+/* ===== 🎛️ 배너 표시 설정 ===== */
+const SHOW_CHAT_BANNER = true;
+const SHOW_GENIE_BANNER = true;
+const SHOW_GOTO_BANNER = true;
+
+const fmtI = n => Math.round(n).toLocaleString('ko-KR');
+function chgHtml(v) {
+  const cls = v > 0 ? 'chg-up' : v < 0 ? 'chg-down' : 'chg-zero';
+  const arrow = v > 0 ? '▲' : v < 0 ? '▼' : '–';
+  return `<span class="${cls}">${arrow} ${fmtI(Math.abs(v))}</span>`;
+}
+
+fetch('petrol.json?t=' + Date.now())
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(d => {
+    if (d.region) document.getElementById('regionTitle').textContent =
+      `⛽ 오늘의 기름값 — ${d.region} (리터당)`;
+
+    const box = document.getElementById('fuelList');
+    box.innerHTML = '';
+    (d.items || []).forEach(f => {
+      const div = document.createElement('div');
+      div.className = 'fuel-item';
+      div.innerHTML = `
+        <div class="info">
+          <div class="fname">${f.name}</div>
+          <div class="fsub">1리터 기준</div>
+        </div>
+        <div class="nums">
+          <div class="frate">${fmtI(f.rate)}짯</div>
+          <div class="fchg">${chgHtml(f.change)}</div>
+        </div>`;
+      box.appendChild(div);
+    });
+    if (!d.items || !d.items.length)
+      box.innerHTML = '<div class="card" style="text-align:center;font-size:13px;color:#90a4ae;">기름값 데이터를 불러오지 못했습니다.</div>';
+
+    document.getElementById('updatedAt').textContent = `기름값 업데이트: ${d.date || ''} · 매일 자동 갱신`;
+  })
+  .catch(() => {
+    document.getElementById('updatedAt').textContent = '데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.';
+  });
+
+if (!SHOW_CHAT_BANNER)  document.getElementById('bannerChat').style.display  = 'none';
+if (!SHOW_GENIE_BANNER) document.getElementById('bannerGenie').style.display = 'none';
+if (!SHOW_GOTO_BANNER)  document.getElementById('bannerGoto').style.display  = 'none';
+</script>
+</body>
+</html>

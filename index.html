@@ -16,6 +16,15 @@
   }
   .wrap { max-width:480px; margin:0 auto; padding:0 14px; }
 
+  /* 탭 메뉴 */
+  .tabs { display:flex; gap:8px; margin:0 0 16px; }
+  .tabs a {
+    flex:1; text-align:center; text-decoration:none; font-family:inherit;
+    font-size:13px; font-weight:800; padding:11px 4px; border-radius:12px;
+    background:rgba(255,255,255,.12); color:rgba(255,255,255,.75); transition:background .15s;
+  }
+  .tabs a.active { background:#f5b942; color:#1a2a33; }
+
   header { text-align:center; padding:34px 16px 22px; color:#fff; }
   header .flag { font-size:40px; }
   header h1 { font-size:22px; font-weight:900; margin-top:8px; letter-spacing:-0.5px; }
@@ -186,6 +195,13 @@
     <h1>미얀마 짯 환율 계산기</h1>
     <p>원화 · 달러 · 짯(MMK) 자유롭게 변환 + 예상 범위 표시</p>
   </header>
+
+  <!-- 탭 메뉴 -->
+  <div class="tabs">
+    <a href="index.html" class="active">💱 환율</a>
+    <a href="gold.html">🥇 금</a>
+    <a href="petrol.html">⛽ 기름</a>
+  </div>
 
   <!-- 입력 카드 -->
   <div class="card">
