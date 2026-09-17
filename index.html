@@ -533,12 +533,14 @@ function loadChangeLog() {
         return;
       }
       const fmtN = v => Number(v).toLocaleString('ko-KR', { maximumFractionDigits: 2 });
+      const arrow = c => c > 0 ? ` <span style="color:#c62828;">▲${fmtN(c)}</span>`
+                        : c < 0 ? ` <span style="color:#1565c0;">▼${fmtN(Math.abs(c))}</span>` : '';
       const items = log.slice(-7).reverse();  // 최근 7건, 최신순
       box.innerHTML = items.map((e, i) => `
         <div class="chg-item">
           ${i === 0 ? '<span class="chg-badge">N</span>' : ''}
           <span class="t">${e.t}</span>
-          <span class="v">1$ = ${fmtN(e.usd)}짯<small>1원 = ${fmtN(e.krw)}짯</small></span>
+          <span class="v">1$ = ${fmtN(e.usd)}짯${arrow(e.chg || 0)}<small>1원 = ${fmtN(e.krw)}짯</small></span>
         </div>`).join('');
     })
     .catch(() => {

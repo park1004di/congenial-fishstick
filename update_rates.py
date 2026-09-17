@@ -385,8 +385,9 @@ def main():
         last_usd = log[-1]["usd"] if log else None
         cur_usd = market_item["mmkPerUsd"]
         if last_usd != cur_usd:  # 값이 바뀐 경우에만 기록
+            chg = round(cur_usd - last_usd, 2) if last_usd is not None else 0
             log.append({"t": kst.strftime("%Y-%m-%d %H:%M"),
-                        "usd": cur_usd, "krw": market_item["mmkPerKrw"]})
+                        "usd": cur_usd, "krw": market_item["mmkPerKrw"], "chg": chg})
             log = log[-100:]  # 최근 100건만 유지
             with open("market_log.json", "w", encoding="utf-8") as f:
                 json.dump(log, f, ensure_ascii=False, indent=2)
