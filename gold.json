@@ -12,8 +12,8 @@
       "name": "16 Pe Ye",
       "buy": 10100000.0,
       "sell": 10170000.0,
-      "buy_change": 50000.0,
-      "sell_change": 50000.0
+      "buy_change": 0.0,
+      "sell_change": 0.0
     },
     {
       "code": "15peye",
@@ -28,8 +28,8 @@
       "name": "New 16 Pe Ye",
       "buy": 9930000.0,
       "sell": 10000000.0,
-      "buy_change": 50000.0,
-      "sell_change": 50000.0
+      "buy_change": 0.0,
+      "sell_change": 0.0
     },
     {
       "code": "new-15peye",
